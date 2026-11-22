@@ -44,6 +44,9 @@ ANNOUNCE_CHANNEL = os.environ.get("ANNOUNCE_CHANNEL", "general")
 # cloud servers (others answer 403 there); "default" = yt-dlp's own choice.
 YT_CLIENTS = [c.strip() for c in os.environ.get("YT_CLIENTS", "tv_simply,default").split(",") if c.strip()]
 FORMAT = "141/bestaudio[acodec=opus]/bestaudio/best"
+# high = YouTube's best audio (Opus ~160 kbps) through yt-dlp at the start of a song; seeking uses the direct link.
+# normal = always the direct link (on cloud servers that is ~95 kbps AAC from the tv_simply client).
+QUALITY = os.environ.get("QUALITY", "high")
 ALLOWED_GUILDS = {int(g) for g in os.environ.get("ALLOWED_GUILDS", "").split(",") if g.strip()}
 
 
@@ -94,7 +97,7 @@ class Track:
     title: str
     duration: float | None
     who: str
-    pipe: bool = False  # set when the direct link failed: play through yt-dlp instead
+    bad: set = field(default_factory=set)  # play modes that failed for this track ("hq" pipe, "direct" link)
 
 
 @dataclass
@@ -104,7 +107,8 @@ class Player:
     started: float = 0.0     # wall time when the current track (re)started
     offset: int = 0          # seconds into the track where it (re)started
     paused_at: float = 0.0
-    volume: float = 0.5
+    volume: float = 1.0
+    mode: str = ""           # how the current track is playing: "hq" or "direct"
     loop: bool = False
     gen: int = 0             # bumps on every play/seek so an old track's end can't skip the new one
     text: discord.abc.Messageable | None = None
@@ -150,7 +154,7 @@ def stream_url(page_url: str) -> tuple[str, dict]:
 
 
 def pipe_source(page_url: str, seek: int, volume: float):
-    """fallback: yt-dlp downloads (its own chunked downloader works where FFmpeg gets 403) and pipes into FFmpeg"""
+    """best audio: yt-dlp downloads (its own chunked downloader works where FFmpeg gets 403) and pipes into FFmpeg"""
     cmd = [sys.executable, "-m", "yt_dlp", "-q", "--no-warnings", "-f", FORMAT, "-o", "-", page_url]
     if COOKIES:
         cmd[3:3] = ["--cookies", COOKIES]
@@ -207,7 +211,15 @@ async def play_next(guild: discord.Guild, seek: int = 0, replay: bool = False) -
             start_idle(guild)
             return
     track = p.now
-    if track.pipe:
+    order = ["hq", "direct"] if seek == 0 and QUALITY == "high" else ["direct", "hq"]
+    left = [m for m in order if m not in track.bad]
+    if not left:
+        if p.text:
+            await p.text.send(f"Can't play **{track.title}**: YouTube refused every way. Skipping.")
+        p.now = None
+        return await play_next(guild)
+    p.mode = left[0]
+    if p.mode == "hq":
         src, p.proc = await asyncio.to_thread(pipe_source, track.url, seek, p.volume)
         return _start(guild, p, track, src, seek, replay)
     try:
@@ -241,10 +253,10 @@ def _start(guild: discord.Guild, p: Player, track: Track, src, seek: int, replay
         if err:
             print("player error:", err)
         ran = time.time() - p.started
-        if ran < 5 and not track.pipe and (track.duration or 99) > 10:
-            # the stream died at once (YouTube 403 on this server): try again through yt-dlp
-            print(f"direct stream failed after {ran:.1f}s, retrying via yt-dlp pipe: {track.title}")
-            track.pipe = True
+        if ran < 5 and (track.duration or 99) > 10:
+            # the stream died at once (e.g. YouTube 403 on this server): try the other way
+            print(f"{p.mode} stream failed after {ran:.1f}s, trying the other way: {track.title}")
+            track.bad.add(p.mode)
             asyncio.run_coroutine_threadsafe(play_next(guild, seek=p.offset, replay=True), bot.loop)
             return
         asyncio.run_coroutine_threadsafe(play_next(guild), bot.loop)

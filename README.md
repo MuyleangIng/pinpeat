@@ -17,7 +17,8 @@ Named after the *pinpeat* (ពិណពាទ្យ), the Khmer classical orches
 - **Many servers at once**: each server gets its own queue, volume and voice channel.
 - **Optional YouTube sign-in** with your own cookies (Premium: better audio when offered, age-restricted and members-only videos).
 - **Says when it's online**: posts "🟢 Pinpeat is online!" in `#general` when it starts (turn off with `ANNOUNCE=0`).
-- **Works on cloud servers**: uses YouTube's `tv_simply` client and falls back to a yt-dlp pipe when YouTube answers 403.
+- **Good sound**: plays YouTube's best audio (Opus ~130-160 kbps, 48 kHz) through yt-dlp, starting at 100% volume.
+- **Works on cloud servers**: seeking uses YouTube's `tv_simply` client; if one way gets a 403 from YouTube, it tries the other.
 - Leaves the voice channel after 5 idle minutes.
 
 ## Commands
@@ -69,7 +70,8 @@ cp .env.example .env      # put DISCORD_TOKEN in it
 | `ALLOWED_GUILDS` | (all) | comma-separated server IDs the bot answers in |
 | `IDLE_LEAVE_S` | `300` | leave voice after this many idle seconds |
 | `MAX_PLAYLIST` | `200` | max tracks taken from a playlist link |
-| `YT_CLIENTS` | `tv_simply,default` | YouTube clients tried for the stream link |
+| `QUALITY` | `high` | `high` = best audio via yt-dlp (songs start ~5 s slower); `normal` = direct link, faster start |
+| `YT_CLIENTS` | `tv_simply,default` | YouTube clients tried for the direct link |
 
 ### 3. Run
 
@@ -122,6 +124,11 @@ A `cookies.txt` gives full access to that Google account (not only YouTube). Kee
 | "Sign in to confirm you're not a bot" | add cookies (above), or `./cloud.sh update` for the newest yt-dlp |
 | HTTP 403 in the log | YouTube blocking the stream link; the bot retries through yt-dlp. Update yt-dlp if it keeps happening. |
 | `/` commands don't show | wait a few minutes after the first start, or restart the Discord app |
+
+## Sound quality
+
+The bot sends 128 kbps Opus, but each Discord voice channel has its own bitrate (64 kbps by default).
+For music, raise it: **Edit Channel → Bitrate → 96 kbps** (higher needs Server Boost).
 
 ## Files
 

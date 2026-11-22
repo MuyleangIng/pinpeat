@@ -1,0 +1,6 @@
+.env
+cookies*.txt
+deploy.env
+__pycache__/
+.venv/
+.DS_Store

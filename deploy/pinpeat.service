@@ -1,0 +1,18 @@
+# systemd unit for Linux servers; deploy/install_linux.sh fills in @USER@ and @DIR@
+[Unit]
+Description=Pinpeat Discord music bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+Environment=PATH=@HOME@/.deno/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=@DIR@/.venv/bin/python -u bot.py
+Restart=always
+RestartSec=10
+Nice=5
+MemoryMax=600M
+
+[Install]
+WantedBy=multi-user.target
